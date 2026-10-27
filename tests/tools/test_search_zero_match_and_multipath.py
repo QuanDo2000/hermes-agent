@@ -308,3 +308,42 @@ class TestSymlinkedRootOnTheFilesLane:
         ops = ShellFileOperations(LocalEnvironment(str(tmp_path)))
 
         assert ops._is_broad_local_search_root(str(tmp_path / "link-to-home")) is True
+
+
+@pytest.mark.parametrize("engine", ["rg", "grep", "grep-pruned"])
+def test_option_prefixed_content_pattern_is_not_an_option(tmp_path, monkeypatch, engine):
+    from tools.environments.local import LocalEnvironment
+    from tools.file_operations import ShellFileOperations
+
+    root = tmp_path / (".explicit-root" if engine == "grep-pruned" else "project")
+    root.mkdir()
+    source = root / "options.txt"
+    source.write_text("usage: --gpu-reset\nother line\n", encoding="utf-8")
+    ops = ShellFileOperations(LocalEnvironment(cwd=str(root)))
+    selected = "rg" if engine == "rg" else "grep"
+    if not ops._has_command(selected):
+        pytest.skip(f"{selected} not installed")
+    real = ops._has_command
+    monkeypatch.setattr(ops, "_has_command", lambda cmd: real(cmd) and (cmd not in {"rg", "grep"} or cmd == selected))
+
+    result = ops.search("--gpu-reset", path=str(root), target="content")
+    assert result.error is None, result.error
+    assert result.total_count == 1
+    assert result.matches[0].content == "usage: --gpu-reset"
+    counts = ops.search("--gpu-reset", path=str(root), target="content", output_mode="count")
+    assert counts.error is None, counts.error
+    assert counts.counts == {str(source): 1}
+
+
+def test_option_prefixed_zero_match_probe_preserves_case_hint(tmp_path):
+    from tools.environments.local import LocalEnvironment
+    from tools.file_operations import ShellFileOperations
+
+    (tmp_path / "options.txt").write_text("--GPU-RESET\n", encoding="utf-8")
+    ops = ShellFileOperations(LocalEnvironment(cwd=str(tmp_path)))
+    if not ops._has_command("rg"):
+        pytest.skip("rg not installed")
+    result = ops.search("--gpu-reset", path=str(tmp_path), target="content")
+    assert result.error is None, result.error
+    assert result.total_count == 0
+    assert "case-insensitive" in (result.warning or "")
