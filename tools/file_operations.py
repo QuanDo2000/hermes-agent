@@ -963,6 +963,7 @@ class ShellFileOperations(LintMixin, SearchMixin, FileOperations):
         kept = bytearray()      # first ``clamp`` bytes of that line
         have_partial = False    # that line has bytes but no newline yet
         last_byte = b""
+        bytes_read = 0
         digest = hashlib.sha256()
         try:
             with open(full, "rb") as fh:
@@ -975,6 +976,7 @@ class ShellFileOperations(LintMixin, SearchMixin, FileOperations):
                     chunk = fh.read(1 << 20)
                     if not chunk:
                         break
+                    bytes_read += len(chunk)
                     digest.update(chunk)
                     last_byte = chunk[-1:]
                     if lineno > end_line:
@@ -1010,8 +1012,10 @@ class ShellFileOperations(LintMixin, SearchMixin, FileOperations):
         read_output = _strip_terminal_fence_leaks(b"".join(page).decode("utf-8", errors="replace"))
         result = self._assemble_read_result(
             read_output, offset=offset, end_line=end_line, total_lines=total_lines,
-            file_size=file_size,
-            file_ends_with_newline=(last_byte == b"\n") if file_size else None)
+            # procfs reports st_size=0 even for nonempty text. Use the bytes
+            # already scanned, like the shell path's wc -c, to decide emptiness.
+            file_size=bytes_read,
+            file_ends_with_newline=(last_byte == b"\n") if bytes_read else None)
         result._snapshot = (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns, digest.digest())
         return result
 

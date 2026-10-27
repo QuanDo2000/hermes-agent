@@ -477,6 +477,29 @@ def test_fail_on_skip_passes_a_run_without_skips(tmp_path: Path) -> None:
     assert "SKIPPED" not in proc.stdout
 
 
+@pytest.mark.parametrize("form", ["positional", "paths"])
+def test_missing_explicit_root_refuses_before_running_valid_tests(tmp_path, form):
+    probe = tmp_path / "probe"
+    probe.mkdir()
+    receipt = tmp_path / "ran"
+    valid = probe / "test_valid.py"
+    valid.write_text(
+        f"from pathlib import Path\ndef test_valid():\n    Path({str(receipt)!r}).touch()\n",
+        encoding="utf-8",
+    )
+    missing = probe / "test_missing.py"
+    arguments = ([str(valid), str(missing)] if form == "positional"
+                 else ["--paths", os.pathsep.join([str(valid), str(missing)])])
+    runner = _probe_root(tmp_path) / "scripts/run_tests_parallel.py"
+    result = subprocess.run(
+        [sys.executable, str(runner), *arguments, "-j", "1", "--file-timeout", "30"],
+        cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", timeout=60, check=False,
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert str(missing) in result.stderr
+    assert not receipt.exists()
+
+
 @pytest.mark.parametrize("form,expected", [
     ("positional", ["alpha", "beta"]), ("bare-k", ["alpha"]),
     ("node-id", ["alpha"]), ("explicit-k", ["beta"]),

@@ -1040,8 +1040,9 @@ def cronjob(
 
 def _script_description(home: str) -> str:
     return (f"Optional script run each tick; stdout is injected into the agent's prompt as context (with no_agent=True "
-            f"the script IS the job). Relative paths resolve under {home}/scripts/; .sh/.bash via bash, else Python. "
-            "On update, '' clears.")
+            f"the script IS the job). For create/update and script monitors, the file must already exist under "
+            f"{home}/scripts/ and be specified by a confined relative path (no absolute paths, ~, or traversal outside "
+            "that directory). .sh/.bash via bash, else Python. On update, '' clears.")
 
 
 def _cronjob_schema_overrides() -> dict:

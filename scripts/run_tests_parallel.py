@@ -271,6 +271,11 @@ def _select_files(
         else:
             roots = [repo_root / p for p in _split_pathspec(args.paths)]
 
+        for root in roots:
+            if not root.exists():
+                print(f"error: test path does not exist: {root}", file=sys.stderr)
+                sys.exit(2)
+
         if args.include_integration:
             # Caller takes responsibility — typically used via explicit -k filter.
             global _SKIP_PARTS
